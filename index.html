@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cuenta Regresiva con Sonidos Diferentes</title>
+    
+    <style>
+        /* El CSS es el mismo que antes para mantener la apariencia */
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #e8f4f8;
+        }
+
+        .timer-container {
+            background-color: #fff;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
+            text-align: center;
+        }
+
+        .time-input {
+            margin-bottom: 20px;
+        }
+
+        .time-input input {
+            width: 50px;
+            padding: 10px;
+            font-size: 1.2em;
+            text-align: center;
+            border: 2px solid #ccc;
+            border-radius: 5px;
+            margin: 0 5px;
+        }
+
+        .time-input span {
+            font-size: 1.2em;
+            font-weight: bold;
+        }
+
+        .timer-display {
+            font-size: 5em;
+            margin-bottom: 25px;
+            color: #2c3e50;
+            font-weight: bold;
+        }
+
+        .timer-controls button {
+            padding: 10px 25px;
+            margin: 0 10px;
+            font-size: 1.1em;
+            cursor: pointer;
+            border: none;
+            border-radius: 5px;
+            transition: background-color 0.3s ease;
+            font-weight: bold;
+        }
+
+        #startStopBtn {
+            background-color: #3498db; 
+            color: white;
+        }
+
+        #startStopBtn:hover {
+            background-color: #2980b9;
+        }
+
+        #resetBtn {
+            background-color: #e74c3c; 
+            color: white;
+        }
+
+        #resetBtn:hover {
+            background-color: #c0392b;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="timer-container">
+        <p>El temporizador sonará diferente en el último segundo antes de cada minuto.</p>
+        <div class="time-input">
+            <input type="number" id="minutesInput" value="1" min="0" max="99" maxlength="2">
+            <span>Minutos</span>
+            <input type="number" id="secondsInput" value="10" min="0" max="59" maxlength="2">
+            <span>Segundos</span>
+        </div>
+
+        <div id="display" class="timer-display">01:10</div>
+
+        <div class="timer-controls">
+            <button id="startStopBtn">Iniciar</button>
+            <button id="resetBtn">Reiniciar</button>
+        </div>
+    </div>
+
+    <script>
+        // Variables de control
+        let totalSeconds = 70; // 1 minuto y 10 segundos por defecto
+        let timerInterval;
+        let isRunning = false;
+        let isFinished = false;
+
+        // Referencias a elementos del DOM
+        const display = document.getElementById('display');
+        const startStopBtn = document.getElementById('startStopBtn');
+        const resetBtn = document.getElementById('resetBtn');
+        const minutesInput = document.getElementById('minutesInput');
+        const secondsInput = document.getElementById('secondsInput');
+
+        // Función para generar un sonido con una frecuencia específica
+        function playTone(frequency, duration = 0.2) {
+            try {
+                const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                const oscillator = audioCtx.createOscillator();
+                const gainNode = audioCtx.createGain();
+
+                oscillator.connect(gainNode);
+                gainNode.connect(audioCtx.destination);
+
+                oscillator.type = 'sine';
+                oscillator.frequency.setValueAtTime(frequency, audioCtx.currentTime); 
+                gainNode.gain.setValueAtTime(0.5, audioCtx.currentTime); 
+
+                oscillator.start();
+                oscillator.stop(audioCtx.currentTime + duration); 
+            } catch (e) {
+                console.error("No se pudo iniciar el AudioContext:", e);
+            }
+        }
+        
+        // 🔊 SONIDO NORMAL (Para 4, 3, 2 segundos)
+        function playNormalBeep() {
+            playTone(440); // Tono medio
+        }
+
+        // 🚨 SONIDO DIFERENTE (Para el segundo 1 y para el final)
+        function playHighBeep() {
+            playTone(880, 0.4); // Tono agudo, más largo (0.4s)
+        }
+
+        // --- Lógica del Temporizador ---
+        
+        function formatTime(seconds) {
+            const min = Math.floor(seconds / 60);
+            const sec = seconds % 60;
+            const formattedMinutes = String(min).padStart(2, '0');
+            const formattedSeconds = String(sec).padStart(2, '0');
+            return `${formattedMinutes}:${formattedSeconds}`;
+        }
+
+        function initializeTime() {
+            const min = parseInt(minutesInput.value) || 0;
+            const sec = parseInt(secondsInput.value) || 0;
+            totalSeconds = (min * 60) + sec;
+            display.textContent = formatTime(totalSeconds);
+            isFinished = false; 
+            
+            minutesInput.disabled = isRunning;
+            secondsInput.disabled = isRunning;
+        }
+
+        function countdown() {
+            // 🛑 CONDICIÓN DE PARADA FINAL (TOTAL SECONDS = 0)
+            if (totalSeconds <= 0) {
+                clearInterval(timerInterval);
+                isRunning = false;
+                isFinished = true;
+                display.textContent = "¡Tiempo!";
+                startStopBtn.textContent = 'Iniciar';
+                playHighBeep(); // Usa el sonido fuerte para el final
+                
+                initializeTime(); 
+                return;
+            }
+            
+            // 🔔 LÓGICA DE SONIDO POR MINUTO
+            const secondsInCurrentMinute = totalSeconds % 60; 
+
+            if (secondsInCurrentMinute === 1) {
+                // Caso especial: El último segundo (XX:01)
+                playHighBeep(); 
+            } else if (secondsInCurrentMinute >= 2 && secondsInCurrentMinute <= 4) {
+                // Sonido normal para 4, 3, 2
+                playNormalBeep();
+            }
+            
+            totalSeconds--;
+            display.textContent = formatTime(totalSeconds);
+        }
+
+        // --- Manejo de Eventos (Igual que antes) ---
+
+        startStopBtn.addEventListener('click', () => {
+            if (!isRunning) {
+                if (!isFinished) {
+                    initializeTime(); 
+                }
+                
+                if (totalSeconds > 0) {
+                    timerInterval = setInterval(countdown, 1000); 
+                    isRunning = true;
+                    startStopBtn.textContent = 'Detener';
+                    minutesInput.disabled = true;
+                    secondsInput.disabled = true;
+                } else {
+                    alert("Por favor, introduce un tiempo válido (mayor a 0 segundos).");
+                }
+            } else {
+                clearInterval(timerInterval);
+                isRunning = false;
+                startStopBtn.textContent = 'Reanudar';
+                minutesInput.disabled = false;
+                secondsInput.disabled = false;
+            }
+        });
+
+        resetBtn.addEventListener('click', () => {
+            clearInterval(timerInterval);
+            isRunning = false;
+            startStopBtn.textContent = 'Iniciar';
+            
+            initializeTime(); 
+            
+            minutesInput.disabled = false;
+            secondsInput.disabled = false;
+        });
+        
+        minutesInput.addEventListener('input', initializeTime);
+        secondsInput.addEventListener('input', initializeTime);
+
+        // Inicializar al cargar la página
+        initializeTime();
+    </script>
+</body>
+</html>
