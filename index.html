@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Temporizador TV con Botones Rápidos</title>
+    <title>Temporizador con Preparación</title>
     
     <style>
         body {
@@ -22,20 +22,20 @@
             border-radius: 15px;
             box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
             text-align: center;
-            max-width: 400px;
+            max-width: 450px;
             width: 90%;
         }
         
         /* Inputs manuales */
         .time-input { margin-bottom: 15px; }
-        .time-input input { width: 60px; padding: 10px; font-size: 1.3em; text-align: center; border: 2px solid #ccc; border-radius: 8px; margin: 0 5px; }
+        .time-input input { width: 70px; padding: 10px; font-size: 1.5em; text-align: center; border: 2px solid #ccc; border-radius: 8px; margin: 0 5px; font-weight: bold; color: #333; }
         .time-input span { font-size: 1.1em; font-weight: bold; color: #555; }
 
-        /* NUEVO: Botones de Tiempo Predefinido */
+        /* Botones Rápidos */
         .preset-buttons {
             display: flex;
             justify-content: center;
-            gap: 10px;
+            gap: 8px;
             margin-bottom: 20px;
             flex-wrap: wrap;
         }
@@ -44,31 +44,32 @@
             background-color: #ecf0f1;
             border: 1px solid #bdc3c7;
             color: #2c3e50;
-            padding: 8px 15px;
+            padding: 10px 15px;
             border-radius: 20px;
             cursor: pointer;
-            font-size: 0.9em;
+            font-size: 1em;
             font-weight: bold;
             transition: all 0.2s;
+            min-width: 60px;
         }
-
-        .btn-preset:hover {
-            background-color: #d5dbdb;
-            transform: scale(1.05);
-        }
+        .btn-preset:hover { background-color: #d5dbdb; transform: scale(1.05); }
 
         /* Display del tiempo */
         .timer-display { 
-            font-size: 5.5em; 
-            margin-bottom: 25px; 
+            font-size: 6em; 
+            margin-bottom: 20px; 
             color: #2c3e50; 
             font-weight: bold; 
             cursor: pointer; 
             line-height: 1;
+            transition: color 0.3s;
         }
 
-        /* Botones de Control Principal */
-        .timer-controls button { padding: 15px 30px; margin: 0 10px; font-size: 1.2em; cursor: pointer; border: none; border-radius: 8px; transition: background-color 0.3s ease; font-weight: bold; color: white; }
+        /* Clase para cuando está en preparación (Naranja) */
+        .prep-mode { color: #e67e22 !important; }
+
+        /* Botones de Control */
+        .timer-controls button { padding: 15px 30px; margin: 0 10px; font-size: 1.3em; cursor: pointer; border: none; border-radius: 8px; transition: background-color 0.3s ease; font-weight: bold; color: white; }
         #startStopBtn { background-color: #3498db; }
         #startStopBtn:hover { background-color: #2980b9; }
         #resetBtn { background-color: #e74c3c; }
@@ -81,20 +82,20 @@
 <body>
     <div class="timer-container">
         <div class="time-input">
-            <input type="number" id="minutesInput" value="0" min="0" max="99" maxlength="2">
+            <input type="number" id="minutesInput" value="1" min="0" max="99" maxlength="2">
             <span>m</span>
             <input type="number" id="secondsInput" value="0" min="0" max="59" maxlength="2">
             <span>s</span>
         </div>
 
         <div class="preset-buttons">
-            <button class="btn-preset" onclick="setPreset(1)">1 min</button>
-            <button class="btn-preset" onclick="setPreset(5)">5 min</button>
-            <button class="btn-preset" onclick="setPreset(10)">10 min</button>
-            <button class="btn-preset" onclick="setPreset(15)">15 min</button>
+            <button class="btn-preset" onclick="setPreset(1, 0)">1 min</button>
+            <button class="btn-preset" onclick="setPreset(5, 0)">5 min</button>
+            <button class="btn-preset" onclick="setPreset(10, 0)">10 min</button>
+            <button class="btn-preset" onclick="setPreset(15, 0)">15 min</button>
         </div>
 
-        <div id="display" class="timer-display">00:00</div>
+        <div id="display" class="timer-display">01:00</div>
 
         <div class="timer-controls">
             <button id="startStopBtn">Iniciar</button>
@@ -106,8 +107,10 @@
     <script>
         // Variables
         let totalSeconds = 0; 
+        let prepSeconds = 5; // 5 Segundos de preparación fija
         let timerInterval;
         let isRunning = false;
+        let isPrepPhase = false; // Indica si estamos en fase de preparación
         let isFinished = false;
         let wakeLock = null; 
 
@@ -119,27 +122,15 @@
         const secondsInput = document.getElementById('secondsInput');
         const statusDiv = document.getElementById('status'); 
 
-        // --- FUNCIÓN NUEVA: CONFIGURAR PREDEFINIDOS ---
-        function setPreset(minutes) {
-            // Detener si está corriendo
-            if (isRunning) {
-                clearInterval(timerInterval);
-                isRunning = false;
-                startStopBtn.textContent = 'Iniciar';
-                releaseWakeLock();
-            }
-            
-            // Actualizar inputs y lógica
+        // --- PRESETS ---
+        function setPreset(minutes, seconds) {
+            fullReset();
             minutesInput.value = minutes;
-            secondsInput.value = 0;
+            secondsInput.value = seconds;
             initializeTime();
-            
-            // Habilitar inputs por si el usuario quiere ajustar
-            minutesInput.disabled = false;
-            secondsInput.disabled = false;
         }
 
-        // --- WAKE LOCK (Igual que antes) ---
+        // --- WAKE LOCK ---
         async function requestWakeLock() {
             if ('wakeLock' in navigator && !wakeLock) {
                 try {
@@ -150,11 +141,7 @@
                         wakeLock = null;
                     });
                 } catch (err) {
-                    if (err.name === 'NotAllowedError') {
-                        statusDiv.textContent = '👇 Toca el tiempo para activar pantalla.';
-                    } else {
-                        console.error(err);
-                    }
+                    if (err.name === 'NotAllowedError') statusDiv.textContent = '👇 Toca el tiempo para activar pantalla.';
                 }
             }
         }
@@ -167,7 +154,7 @@
             }
         }
         
-        // --- SONIDO (Igual que antes) ---
+        // --- SONIDOS ---
         function playTone(frequency, duration = 0.2) {
             try {
                 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -184,8 +171,9 @@
         }
         function playNormalBeep() { playTone(440); }
         function playHighBeep() { playTone(880, 0.4); }
+        function playPrepBeep() { playTone(600, 0.1); } // Beep corto para preparación
 
-        // --- LÓGICA DEL TEMPORIZADOR ---
+        // --- LÓGICA ---
         function formatTime(seconds) {
             const min = Math.floor(seconds / 60);
             const sec = seconds % 60;
@@ -197,68 +185,116 @@
             const sec = parseInt(secondsInput.value) || 0;
             totalSeconds = (min * 60) + sec;
             display.textContent = formatTime(totalSeconds);
-            isFinished = false; 
+            display.classList.remove('prep-mode'); // Asegura color normal
         }
 
-        function countdown() {
-            if (totalSeconds <= 0) {
-                clearInterval(timerInterval);
-                isRunning = false;
-                isFinished = true;
-                display.textContent = "¡Tiempo!";
-                startStopBtn.textContent = 'Iniciar';
-                playHighBeep(); 
-                releaseWakeLock(); 
-                initializeTime(); 
-                return;
-            }
+        // Función que ejecuta la cuenta regresiva PRINCIPAL
+        function runMainTimer() {
+            isPrepPhase = false;
+            display.classList.remove('prep-mode'); // Color normal
             
-            const secondsInCurrentMinute = totalSeconds % 60; 
-            if (secondsInCurrentMinute === 1) playHighBeep(); 
-            else if (secondsInCurrentMinute >= 2 && secondsInCurrentMinute <= 4) playNormalBeep();
-            
-            totalSeconds--;
-            display.textContent = formatTime(totalSeconds);
+            // Intervalo principal
+            timerInterval = setInterval(() => {
+                if (totalSeconds <= 0) {
+                    clearInterval(timerInterval);
+                    isRunning = false;
+                    isFinished = true;
+                    display.textContent = "¡Tiempo!";
+                    startStopBtn.textContent = 'Iniciar';
+                    playHighBeep(); 
+                    releaseWakeLock(); 
+                    initializeTime(); 
+                    return;
+                }
+                
+                // Lógica de alarmas por minuto/segundo
+                const secondsInCurrentMinute = totalSeconds % 60; 
+                if (secondsInCurrentMinute === 1) playHighBeep(); 
+                else if (secondsInCurrentMinute >= 2 && secondsInCurrentMinute <= 4) playNormalBeep();
+                
+                totalSeconds--;
+                display.textContent = formatTime(totalSeconds);
+            }, 1000);
+        }
+
+        // Función que ejecuta la PREPARACIÓN (5 seg)
+        function startWarmup() {
+            isPrepPhase = true;
+            prepSeconds = 5; // Resetear segundos de preparación
+            display.textContent = "Prep: " + prepSeconds;
+            display.classList.add('prep-mode'); // Cambiar a color naranja
+            startStopBtn.textContent = 'Detener'; // Permitir detener en preparación
+
+            timerInterval = setInterval(() => {
+                prepSeconds--;
+                
+                if (prepSeconds > 0) {
+                    display.textContent = "Prep: " + prepSeconds;
+                    // Beep en 3, 2, 1
+                    if (prepSeconds <= 3) playPrepBeep();
+                } else {
+                    // FIN DE PREPARACIÓN -> INICIO REAL
+                    clearInterval(timerInterval);
+                    playHighBeep(); // Beep de "GO"
+                    runMainTimer(); // Inicia el timer real
+                }
+            }, 1000);
+        }
+
+        // Función para resetear todo
+        function fullReset() {
+            clearInterval(timerInterval);
+            isRunning = false;
+            isPrepPhase = false;
+            isFinished = false;
+            startStopBtn.textContent = 'Iniciar';
+            display.classList.remove('prep-mode');
+            releaseWakeLock();
+            initializeTime();
+            minutesInput.disabled = false;
+            secondsInput.disabled = false;
         }
 
         // --- EVENTOS ---
         startStopBtn.addEventListener('click', () => {
             if (!isRunning) {
+                // AL PULSAR INICIAR
                 if (!isFinished) initializeTime(); 
+                
                 if (totalSeconds > 0) {
-                    requestWakeLock(); 
-                    timerInterval = setInterval(countdown, 1000); 
                     isRunning = true;
-                    startStopBtn.textContent = 'Detener';
                     minutesInput.disabled = true;
                     secondsInput.disabled = true;
+                    requestWakeLock(); 
+
+                    // AQUÍ ESTÁ LA CLAVE: Iniciamos Preparación primero
+                    startWarmup(); 
                 } else {
                     alert("Por favor, ingresa un tiempo.");
                 }
             } else {
+                // AL PULSAR DETENER
+                // Pausamos todo (ya sea preparación o timer real)
                 clearInterval(timerInterval);
                 isRunning = false;
-                startStopBtn.textContent = 'Reanudar';
+                startStopBtn.textContent = 'Reanudar'; // Nota: Si reanudas, reanuda directo el tiempo, no la prep
                 releaseWakeLock(); 
                 minutesInput.disabled = false;
                 secondsInput.disabled = false;
+                
+                // Si paramos en preparación, quitamos el estilo visual
+                if (isPrepPhase) {
+                    display.classList.remove('prep-mode');
+                    initializeTime(); // Volvemos a mostrar el tiempo original
+                }
             }
         });
 
-        resetBtn.addEventListener('click', () => {
-            clearInterval(timerInterval);
-            isRunning = false;
-            startStopBtn.textContent = 'Iniciar';
-            releaseWakeLock(); 
-            initializeTime(); 
-            minutesInput.disabled = false;
-            secondsInput.disabled = false;
-        });
+        resetBtn.addEventListener('click', fullReset);
         
         minutesInput.addEventListener('input', initializeTime);
         secondsInput.addEventListener('input', initializeTime);
 
-        // Reintento de Wake Lock al tocar el display
         display.addEventListener('click', () => {
             if (isRunning && !wakeLock) requestWakeLock();
         });
