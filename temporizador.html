@@ -3,10 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cuenta Regresiva con Sonidos Diferentes</title>
+    <title>Temporizador con Preparación y Botón de 3 Min</title>
     
     <style>
-        /* El CSS es el mismo que antes para mantener la apariencia */
         body {
             font-family: Arial, sans-serif;
             display: flex;
@@ -20,139 +19,166 @@
         .timer-container {
             background-color: #fff;
             padding: 30px;
-            border-radius: 10px;
-            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
+            border-radius: 15px;
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
             text-align: center;
+            max-width: 450px;
+            width: 90%;
         }
+        
+        /* Inputs manuales */
+        .time-input { margin-bottom: 15px; }
+        .time-input input { width: 70px; padding: 10px; font-size: 1.5em; text-align: center; border: 2px solid #ccc; border-radius: 8px; margin: 0 5px; font-weight: bold; color: #333; }
+        .time-input span { font-size: 1.1em; font-weight: bold; color: #555; }
 
-        .time-input {
+        /* Botones Rápidos */
+        .preset-buttons {
+            display: flex;
+            justify-content: center;
+            gap: 8px;
             margin-bottom: 20px;
+            flex-wrap: wrap;
         }
 
-        .time-input input {
-            width: 50px;
-            padding: 10px;
-            font-size: 1.2em;
-            text-align: center;
-            border: 2px solid #ccc;
-            border-radius: 5px;
-            margin: 0 5px;
-        }
-
-        .time-input span {
-            font-size: 1.2em;
-            font-weight: bold;
-        }
-
-        .timer-display {
-            font-size: 5em;
-            margin-bottom: 25px;
+        .btn-preset {
+            background-color: #ecf0f1;
+            border: 1px solid #bdc3c7;
             color: #2c3e50;
-            font-weight: bold;
-        }
-
-        .timer-controls button {
-            padding: 10px 25px;
-            margin: 0 10px;
-            font-size: 1.1em;
+            padding: 10px 15px;
+            border-radius: 20px;
             cursor: pointer;
-            border: none;
-            border-radius: 5px;
-            transition: background-color 0.3s ease;
+            font-size: 1em;
             font-weight: bold;
+            transition: all 0.2s;
+            min-width: 60px;
+        }
+        .btn-preset:hover { background-color: #d5dbdb; transform: scale(1.05); }
+
+        /* Display del tiempo */
+        .timer-display { 
+            font-size: 6em; 
+            margin-bottom: 20px; 
+            color: #2c3e50; 
+            font-weight: bold; 
+            cursor: pointer; 
+            line-height: 1;
+            transition: color 0.3s;
         }
 
-        #startStopBtn {
-            background-color: #3498db; 
-            color: white;
-        }
+        /* Clase para cuando está en preparación (Naranja) */
+        .prep-mode { color: #e67e22 !important; }
 
-        #startStopBtn:hover {
-            background-color: #2980b9;
-        }
+        /* Botones de Control */
+        .timer-controls button { padding: 15px 30px; margin: 0 10px; font-size: 1.3em; cursor: pointer; border: none; border-radius: 8px; transition: background-color 0.3s ease; font-weight: bold; color: white; }
+        #startStopBtn { background-color: #3498db; }
+        #startStopBtn:hover { background-color: #2980b9; }
+        #resetBtn { background-color: #e74c3c; }
+        #resetBtn:hover { background-color: #c0392b; }
 
-        #resetBtn {
-            background-color: #e74c3c; 
-            color: white;
-        }
-
-        #resetBtn:hover {
-            background-color: #c0392b;
-        }
+        .info-status { margin-top: 15px; font-size: 0.9em; color: #7f8c8d; min-height: 20px;}
     </style>
 </head>
 
 <body>
     <div class="timer-container">
-        <p>El temporizador sonará diferente en el último segundo antes de cada minuto.</p>
         <div class="time-input">
             <input type="number" id="minutesInput" value="1" min="0" max="99" maxlength="2">
-            <span>Minutos</span>
-            <input type="number" id="secondsInput" value="10" min="0" max="59" maxlength="2">
-            <span>Segundos</span>
+            <span>m</span>
+            <input type="number" id="secondsInput" value="0" min="0" max="59" maxlength="2">
+            <span>s</span>
         </div>
 
-        <div id="display" class="timer-display">01:10</div>
+        <div class="preset-buttons">
+            <button class="btn-preset" onclick="setPreset(1, 0)">1 min</button>
+            <button class="btn-preset" onclick="setPreset(3, 0)">3 min</button>
+            <button class="btn-preset" onclick="setPreset(5, 0)">5 min</button>
+            <button class="btn-preset" onclick="setPreset(10, 0)">10 min</button>
+            <button class="btn-preset" onclick="setPreset(15, 0)">15 min</button>
+        </div>
+
+        <div id="display" class="timer-display">01:00</div>
 
         <div class="timer-controls">
             <button id="startStopBtn">Iniciar</button>
             <button id="resetBtn">Reiniciar</button>
         </div>
+        <div id="status" class="info-status"></div>
     </div>
 
     <script>
-        // Variables de control
-        let totalSeconds = 70; // 1 minuto y 10 segundos por defecto
+        // Variables
+        let totalSeconds = 0; 
+        let prepSeconds = 5; // 5 Segundos de preparación fija
         let timerInterval;
         let isRunning = false;
+        let isPrepPhase = false; // Indica si estamos en fase de preparación
         let isFinished = false;
+        let wakeLock = null; 
 
-        // Referencias a elementos del DOM
+        // Referencias DOM
         const display = document.getElementById('display');
         const startStopBtn = document.getElementById('startStopBtn');
         const resetBtn = document.getElementById('resetBtn');
         const minutesInput = document.getElementById('minutesInput');
         const secondsInput = document.getElementById('secondsInput');
+        const statusDiv = document.getElementById('status'); 
 
-        // Función para generar un sonido con una frecuencia específica
+        // --- PRESETS ---
+        function setPreset(minutes, seconds) {
+            fullReset();
+            minutesInput.value = minutes;
+            secondsInput.value = seconds;
+            initializeTime();
+        }
+
+        // --- WAKE LOCK ---
+        async function requestWakeLock() {
+            if ('wakeLock' in navigator && !wakeLock) {
+                try {
+                    wakeLock = await navigator.wakeLock.request('screen');
+                    statusDiv.textContent = '🔒 Pantalla activa.';
+                    wakeLock.addEventListener('release', () => {
+                        statusDiv.textContent = '';
+                        wakeLock = null;
+                    });
+                } catch (err) {
+                    if (err.name === 'NotAllowedError') statusDiv.textContent = '👇 Toca el tiempo para activar pantalla.';
+                }
+            }
+        }
+
+        function releaseWakeLock() {
+            if (wakeLock) {
+                wakeLock.release();
+                wakeLock = null;
+                statusDiv.textContent = '';
+            }
+        }
+        
+        // --- SONIDOS ---
         function playTone(frequency, duration = 0.2) {
             try {
                 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
                 const oscillator = audioCtx.createOscillator();
                 const gainNode = audioCtx.createGain();
-
                 oscillator.connect(gainNode);
                 gainNode.connect(audioCtx.destination);
-
                 oscillator.type = 'sine';
                 oscillator.frequency.setValueAtTime(frequency, audioCtx.currentTime); 
                 gainNode.gain.setValueAtTime(0.5, audioCtx.currentTime); 
-
                 oscillator.start();
                 oscillator.stop(audioCtx.currentTime + duration); 
-            } catch (e) {
-                console.error("No se pudo iniciar el AudioContext:", e);
-            }
+            } catch (e) { console.error(e); }
         }
-        
-        // 🔊 SONIDO NORMAL (Para 4, 3, 2 segundos)
-        function playNormalBeep() {
-            playTone(440); // Tono medio
-        }
+        function playNormalBeep() { playTone(440); }
+        function playHighBeep() { playTone(880, 0.4); }
+        function playPrepBeep() { playTone(600, 0.1); } // Beep corto para preparación
 
-        // 🚨 SONIDO DIFERENTE (Para el segundo 1 y para el final)
-        function playHighBeep() {
-            playTone(880, 0.4); // Tono agudo, más largo (0.4s)
-        }
-
-        // --- Lógica del Temporizador ---
-        
+        // --- LÓGICA ---
         function formatTime(seconds) {
             const min = Math.floor(seconds / 60);
             const sec = seconds % 60;
-            const formattedMinutes = String(min).padStart(2, '0');
-            const formattedSeconds = String(sec).padStart(2, '0');
-            return `${formattedMinutes}:${formattedSeconds}`;
+            return `${String(min).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
         }
 
         function initializeTime() {
@@ -160,82 +186,121 @@
             const sec = parseInt(secondsInput.value) || 0;
             totalSeconds = (min * 60) + sec;
             display.textContent = formatTime(totalSeconds);
-            isFinished = false; 
-            
-            minutesInput.disabled = isRunning;
-            secondsInput.disabled = isRunning;
+            display.classList.remove('prep-mode'); // Asegura color normal
         }
 
-        function countdown() {
-            // 🛑 CONDICIÓN DE PARADA FINAL (TOTAL SECONDS = 0)
-            if (totalSeconds <= 0) {
-                clearInterval(timerInterval);
-                isRunning = false;
-                isFinished = true;
-                display.textContent = "¡Tiempo!";
-                startStopBtn.textContent = 'Iniciar';
-                playHighBeep(); // Usa el sonido fuerte para el final
-                
-                initializeTime(); 
-                return;
-            }
+        // Función que ejecuta la cuenta regresiva PRINCIPAL
+        function runMainTimer() {
+            isPrepPhase = false;
+            display.classList.remove('prep-mode'); // Color normal
             
-            // 🔔 LÓGICA DE SONIDO POR MINUTO
-            const secondsInCurrentMinute = totalSeconds % 60; 
-
-            if (secondsInCurrentMinute === 1) {
-                // Caso especial: El último segundo (XX:01)
-                playHighBeep(); 
-            } else if (secondsInCurrentMinute >= 2 && secondsInCurrentMinute <= 4) {
-                // Sonido normal para 4, 3, 2
-                playNormalBeep();
-            }
-            
-            totalSeconds--;
-            display.textContent = formatTime(totalSeconds);
-        }
-
-        // --- Manejo de Eventos (Igual que antes) ---
-
-        startStopBtn.addEventListener('click', () => {
-            if (!isRunning) {
-                if (!isFinished) {
+            // Intervalo principal
+            timerInterval = setInterval(() => {
+                if (totalSeconds <= 0) {
+                    clearInterval(timerInterval);
+                    isRunning = false;
+                    isFinished = true;
+                    display.textContent = "¡Tiempo!";
+                    startStopBtn.textContent = 'Iniciar';
+                    playHighBeep(); 
+                    releaseWakeLock(); 
                     initializeTime(); 
+                    return;
                 }
                 
-                if (totalSeconds > 0) {
-                    timerInterval = setInterval(countdown, 1000); 
-                    isRunning = true;
-                    startStopBtn.textContent = 'Detener';
-                    minutesInput.disabled = true;
-                    secondsInput.disabled = true;
-                } else {
-                    alert("Por favor, introduce un tiempo válido (mayor a 0 segundos).");
-                }
-            } else {
-                clearInterval(timerInterval);
-                isRunning = false;
-                startStopBtn.textContent = 'Reanudar';
-                minutesInput.disabled = false;
-                secondsInput.disabled = false;
-            }
-        });
+                // Lógica de alarmas por minuto/segundo
+                const secondsInCurrentMinute = totalSeconds % 60; 
+                if (secondsInCurrentMinute === 1) playHighBeep(); 
+                else if (secondsInCurrentMinute >= 2 && secondsInCurrentMinute <= 4) playNormalBeep();
+                
+                totalSeconds--;
+                display.textContent = formatTime(totalSeconds);
+            }, 1000);
+        }
 
-        resetBtn.addEventListener('click', () => {
+        // Función que ejecuta la PREPARACIÓN (5 seg)
+        function startWarmup() {
+            isPrepPhase = true;
+            prepSeconds = 5; // Resetear segundos de preparación
+            display.textContent = "Prep: " + prepSeconds;
+            display.classList.add('prep-mode'); // Cambiar a color naranja
+            startStopBtn.textContent = 'Detener'; // Permitir detener en preparación
+
+            timerInterval = setInterval(() => {
+                prepSeconds--;
+                
+                if (prepSeconds > 0) {
+                    display.textContent = "Prep: " + prepSeconds;
+                    // Beep en 3, 2, 1
+                    if (prepSeconds <= 3) playPrepBeep();
+                } else {
+                    // FIN DE PREPARACIÓN -> INICIO REAL
+                    clearInterval(timerInterval);
+                    playHighBeep(); // Beep de "GO"
+                    runMainTimer(); // Inicia el timer real
+                }
+            }, 1000);
+        }
+
+        // Función para resetear todo
+        function fullReset() {
             clearInterval(timerInterval);
             isRunning = false;
+            isPrepPhase = false;
+            isFinished = false;
             startStopBtn.textContent = 'Iniciar';
-            
-            initializeTime(); 
-            
+            display.classList.remove('prep-mode');
+            releaseWakeLock();
+            initializeTime();
             minutesInput.disabled = false;
             secondsInput.disabled = false;
+        }
+
+        // --- EVENTOS ---
+        startStopBtn.addEventListener('click', () => {
+            if (!isRunning) {
+                // AL PULSAR INICIAR
+                if (!isFinished) initializeTime(); 
+                
+                if (totalSeconds > 0) {
+                    isRunning = true;
+                    minutesInput.disabled = true;
+                    secondsInput.disabled = true;
+                    requestWakeLock(); 
+
+                    // AQUÍ ESTÁ LA CLAVE: Iniciamos Preparación primero
+                    startWarmup(); 
+                } else {
+                    alert("Por favor, ingresa un tiempo.");
+                }
+            } else {
+                // AL PULSAR DETENER
+                // Pausamos todo (ya sea preparación o timer real)
+                clearInterval(timerInterval);
+                isRunning = false;
+                startStopBtn.textContent = 'Reanudar'; // Nota: Si reanudas, reanuda directo el tiempo, no la prep
+                releaseWakeLock(); 
+                minutesInput.disabled = false;
+                secondsInput.disabled = false;
+                
+                // Si paramos en preparación, quitamos el estilo visual
+                if (isPrepPhase) {
+                    display.classList.remove('prep-mode');
+                    initializeTime(); // Volvemos a mostrar el tiempo original
+                }
+            }
         });
+
+        resetBtn.addEventListener('click', fullReset);
         
         minutesInput.addEventListener('input', initializeTime);
         secondsInput.addEventListener('input', initializeTime);
 
-        // Inicializar al cargar la página
+        display.addEventListener('click', () => {
+            if (isRunning && !wakeLock) requestWakeLock();
+        });
+
+        // Inicio
         initializeTime();
     </script>
 </body>
